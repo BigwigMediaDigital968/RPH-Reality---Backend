@@ -28,19 +28,6 @@ export const createLead = async (req, res) => {
       });
     }
 
-    // Check for duplicate phone
-    const existingLead = await Lead.findOne({
-      phone: phone.trim(),
-      status: { $ne: "closed" },
-    });
-
-    if (existingLead) {
-      return res.status(409).json({
-        success: false,
-        message: "Lead with this phone number already exists",
-      });
-    }
-
     const lead = await Lead.create({
       name: sanitizeString(name),
       phone: phone.trim(),
