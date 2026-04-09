@@ -5,6 +5,7 @@ import cors from "cors";
 import connectDB from "./db.js";
 import leadRoutes from "./routes/leadRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
+import propertyRoutes from "./routes/propertyRoutes.js";
 
 // load env
 dotenv.config();
@@ -20,6 +21,7 @@ app.use(express.json());
 
 app.use("/api/leads", leadRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/properties", propertyRoutes);
 
 // test route
 app.get("/", (req, res) => {
