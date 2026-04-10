@@ -1,3 +1,4 @@
+import cloudinary from "../config/cloudinary.js";
 import Application from "../models/Application.js";
 
 // @desc    Get all applications with pagination, search, and filters
@@ -152,17 +153,8 @@ export const createApplication = async (req, res) => {
     // Check for validation errors
 
     const { name, email, phone, city, position, experience } = req.body;
-
-    // Check if email already exists (optional - prevent duplicate applications)
-    if (email) {
-      const existingApplication = await Application.findOne({ email });
-      if (existingApplication) {
-        return res.status(409).json({
-          success: false,
-          message: "An application with this email already exists",
-        });
-      }
-    }
+    const resumeUrl = req.file.path;
+    const resumePublicId = req.file.filename;
 
     // Create new application
     const application = await Application.create({
@@ -172,6 +164,10 @@ export const createApplication = async (req, res) => {
       city,
       position,
       experience,
+      resume: {
+        url: resumeUrl,
+        publicId: resumePublicId,
+      },
     });
 
     res.status(201).json({
@@ -317,7 +313,7 @@ export const deleteApplication = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const application = await Application.findByIdAndDelete(id);
+    const application = await Application.findById(id);
 
     if (!application) {
       return res.status(404).json({
@@ -325,6 +321,13 @@ export const deleteApplication = async (req, res) => {
         message: "Application not found",
       });
     }
+    if (application.resume && application.resume.publicId) {
+      await cloudinary.uploader.destroy(application.resume.publicId, {
+        resource_type: "raw",
+      });
+    }
+
+    await application.remove();
 
     res.status(200).json({
       success: true,

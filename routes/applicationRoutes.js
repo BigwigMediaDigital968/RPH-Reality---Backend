@@ -11,12 +11,13 @@ import {
   bulkUpdateApplications,
   bulkDeleteApplications,
 } from "../controller/applicationController.js";
+import { uploadResume } from "../middleware/upload.js";
 
 const router = express.Router();
 
 // Routes
 router.get("/", getApplications);
-router.post("/", createApplication);
+router.post("/", uploadResume.single("resume"), createApplication);
 
 router.get("/stats", getApplicationStats);
 

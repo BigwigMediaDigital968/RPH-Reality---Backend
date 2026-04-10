@@ -24,11 +24,17 @@ const applicationSchema = new mongoose.Schema(
     },
     experience: {
       type: String,
-      required: true,
+      default: "",
     },
     resume: {
-      type: String,
-      default: "",
+      url: {
+        type: String,
+        default: "",
+      },
+      publicId: {
+        type: String,
+        default: "",
+      },
     },
     status: {
       type: String,
