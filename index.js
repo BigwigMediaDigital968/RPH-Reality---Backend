@@ -6,6 +6,7 @@ import connectDB from "./db.js";
 import leadRoutes from "./routes/leadRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
+import applicationRoutes from "./routes/applicationRoutes.js";
 
 // load env
 dotenv.config();
@@ -22,6 +23,7 @@ app.use(express.json());
 app.use("/api/leads", leadRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/properties", propertyRoutes);
+app.use("/api/applications", applicationRoutes);
 
 // test route
 app.get("/", (req, res) => {
@@ -29,7 +31,7 @@ app.get("/", (req, res) => {
 });
 
 // start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

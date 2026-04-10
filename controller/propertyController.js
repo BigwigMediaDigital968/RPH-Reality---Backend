@@ -1,6 +1,7 @@
 // controllers/propertyController.js
 import mongoose from "mongoose";
 import Property from "../models/Property.js";
+import cloudinary from "../config/cloudinary.js";
 
 // Validation helper
 const validateObjectId = (id) => {
@@ -23,34 +24,41 @@ const generateSlug = (title) => {
     .replace(/^-+|-+$/g, "");
 };
 
+// Helper: Extract Cloudinary public ID from URL
+const getCloudinaryPublicId = (url) => {
+  try {
+    const urlParts = url.split("/");
+    const publicIdWithExtension = urlParts[urlParts.length - 1];
+    const publicId = `properties/${publicIdWithExtension.split(".")[0]}`;
+    return publicId;
+  } catch (error) {
+    console.error("Error extracting public ID:", error);
+    return null;
+  }
+};
+
+// Helper: Delete image from Cloudinary
+const deleteFromCloudinary = async (url) => {
+  const publicId = getCloudinaryPublicId(url);
+  if (publicId) {
+    try {
+      await cloudinary.uploader.destroy(publicId);
+      console.log(`Deleted image: ${publicId}`);
+    } catch (error) {
+      console.error(`Failed to delete image: ${publicId}`, error);
+    }
+  }
+};
+
 // CREATE PROPERTY
 export const createProperty = async (req, res) => {
   try {
-    const {
-      title,
-      description,
-      type,
-      purpose,
-      location,
-      brochure,
-      builder,
-      images,
-      price,
-      bedrooms,
-      bathrooms,
-      areaSqft,
-      highlights,
-      featuresAmenities,
-      nearby,
-      googleMapUrl,
-      videoLink,
-      extraHighlights,
-      instagramLink,
-      extraDetails,
-      faqs,
-      metatitle,
-      metadescription,
-    } = req.body;
+    // Parse property data from FormData
+    console.log("data", req.body);
+    const propertyData = JSON.parse(req.body.data);
+    const imagesPayload = JSON.parse(req.body.imagesPayload || "[]");
+
+    const { title, purpose, location } = propertyData;
 
     // Validation
     if (!title || !purpose || !location) {
@@ -60,10 +68,16 @@ export const createProperty = async (req, res) => {
       });
     }
 
-    // Generate slug
-    let slug = req.body.slug || generateSlug(title);
+    // Validate images payload
+    if (!Array.isArray(imagesPayload)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid images payload",
+      });
+    }
 
-    // Check for duplicate slug
+    // Generate slug
+    let slug = propertyData.slug || generateSlug(title);
     let slugExists = await Property.findOne({ slug });
     let counter = 1;
     while (slugExists) {
@@ -72,33 +86,65 @@ export const createProperty = async (req, res) => {
       counter++;
     }
 
+    // Process images
+    const uploadedFiles = req.files || [];
+    const imageUrlMap = new Map();
+
+    // Map uploaded files by their fieldname (which contains the ID)
+    uploadedFiles.forEach((file) => {
+      // fieldname format: "images[id]"
+      const match = file.fieldname.match(/images\[(.+)\]/);
+      if (match) {
+        const id = match[1];
+        imageUrlMap.set(id, file.path);
+      }
+    });
+
+    // Reconstruct images array based on payload order
+    const finalImages = imagesPayload
+      .sort((a, b) => a.order - b.order)
+      .map((item) => {
+        if (item.type === "new") {
+          return imageUrlMap.get(item.id);
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Validate at least one image
+    if (finalImages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one image is required",
+      });
+    }
+
+    // Create property
     const property = await Property.create({
-      title: sanitizeString(title),
+      title: propertyData.title?.trim(),
       slug,
-      description: sanitizeString(description),
-      type: sanitizeString(type),
-      purpose: purpose.toLowerCase(),
-      location: sanitizeString(location),
-      brochure: sanitizeString(brochure),
-      builder: sanitizeString(builder),
-      images: Array.isArray(images) ? images : [],
-      price: sanitizeString(price),
-      bedrooms: sanitizeString(bedrooms),
-      bathrooms: sanitizeString(bathrooms),
-      areaSqft: sanitizeString(areaSqft),
-      highlights: Array.isArray(highlights) ? highlights : [],
-      featuresAmenities: Array.isArray(featuresAmenities)
-        ? featuresAmenities
-        : [],
-      nearby: Array.isArray(nearby) ? nearby : [],
-      googleMapUrl: sanitizeString(googleMapUrl),
-      videoLink: sanitizeString(videoLink),
-      extraHighlights: Array.isArray(extraHighlights) ? extraHighlights : [],
-      instagramLink: sanitizeString(instagramLink),
-      extraDetails: sanitizeString(extraDetails),
-      faqs: Array.isArray(faqs) ? faqs : [],
-      metatitle: sanitizeString(metatitle),
-      metadescription: sanitizeString(metadescription),
+      description: propertyData.description?.trim() || "",
+      type: propertyData.type?.trim() || "",
+      purpose: propertyData.purpose,
+      location: propertyData.location?.trim(),
+      brochure: propertyData.brochure?.trim() || "",
+      builder: propertyData.builder?.trim() || "",
+      images: finalImages,
+      price: propertyData.price?.trim() || "",
+      bedrooms: propertyData.bedrooms?.trim() || "",
+      bathrooms: propertyData.bathrooms?.trim() || "",
+      areaSqft: propertyData.areaSqft?.trim() || "",
+      highlights: propertyData.highlights || [],
+      featuresAmenities: propertyData.featuresAmenities || [],
+      nearby: propertyData.nearby || [],
+      googleMapUrl: propertyData.googleMapUrl?.trim() || "",
+      videoLink: propertyData.videoLink?.trim() || "",
+      extraHighlights: propertyData.extraHighlights || [],
+      instagramLink: propertyData.instagramLink?.trim() || "",
+      extraDetails: propertyData.extraDetails?.trim() || "",
+      faqs: propertyData.faqs || [],
+      metatitle: propertyData.metatitle?.trim() || "",
+      metadescription: propertyData.metadescription?.trim() || "",
     });
 
     return res.status(201).json({
@@ -108,6 +154,13 @@ export const createProperty = async (req, res) => {
     });
   } catch (error) {
     console.error("Create Property Error:", error);
+
+    // Clean up uploaded files on error
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        deleteFromCloudinary(file.path);
+      });
+    }
 
     if (error.name === "ValidationError") {
       return res.status(400).json({
@@ -121,6 +174,172 @@ export const createProperty = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to create property",
+    });
+  }
+};
+
+// UPDATE PROPERTY
+export const updateProperty = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid property ID",
+      });
+    }
+
+    // Parse property data from FormData
+    const propertyData = JSON.parse(req.body.data);
+    const imagesPayload = JSON.parse(req.body.imagesPayload || "[]");
+
+    // Get existing property
+    const existingProperty = await Property.findById(id);
+    if (!existingProperty) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    // Validate images payload
+    if (!Array.isArray(imagesPayload)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid images payload",
+      });
+    }
+
+    // Process images
+    const uploadedFiles = req.files || [];
+    const imageUrlMap = new Map();
+
+    // Map uploaded files by their fieldname
+    uploadedFiles.forEach((file) => {
+      const match = file.fieldname.match(/images\[(.+)\]/);
+      if (match) {
+        const id = match[1];
+        imageUrlMap.set(id, file.path);
+      }
+    });
+
+    // Reconstruct images array based on payload order
+    const finalImages = imagesPayload
+      .sort((a, b) => a.order - b.order)
+      .map((item) => {
+        if (item.type === "existing") {
+          return item.url;
+        } else if (item.type === "new") {
+          return imageUrlMap.get(item.id);
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Validate at least one image
+    if (finalImages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one image is required",
+      });
+    }
+
+    // Identify images to delete (images in DB but not in payload)
+    const existingImageUrls = imagesPayload
+      .filter((item) => item.type === "existing")
+      .map((item) => item.url);
+
+    const imagesToDelete = existingProperty.images.filter(
+      (img) => !existingImageUrls.includes(img),
+    );
+
+    // Delete removed images from Cloudinary
+    if (imagesToDelete.length > 0) {
+      console.log(`Deleting ${imagesToDelete.length} removed images...`);
+      for (const imageUrl of imagesToDelete) {
+        await deleteFromCloudinary(imageUrl);
+      }
+    }
+
+    // Update slug if title changed
+    let slug = existingProperty.slug;
+    if (propertyData.title && propertyData.title !== existingProperty.title) {
+      if (propertyData.slug) {
+        slug = propertyData.slug;
+      } else {
+        slug = generateSlug(propertyData.title);
+        let slugExists = await Property.findOne({ slug, _id: { $ne: id } });
+        let counter = 1;
+        while (slugExists) {
+          slug = `${generateSlug(propertyData.title)}-${counter}`;
+          slugExists = await Property.findOne({ slug, _id: { $ne: id } });
+          counter++;
+        }
+      }
+    }
+
+    // Update property
+    const property = await Property.findByIdAndUpdate(
+      id,
+      {
+        title: propertyData.title?.trim(),
+        slug,
+        description: propertyData.description?.trim() || "",
+        type: propertyData.type?.trim() || "",
+        purpose: propertyData.purpose,
+        location: propertyData.location?.trim(),
+        brochure: propertyData.brochure?.trim() || "",
+        builder: propertyData.builder?.trim() || "",
+        images: finalImages,
+        price: propertyData.price?.trim() || "",
+        bedrooms: propertyData.bedrooms?.trim() || "",
+        bathrooms: propertyData.bathrooms?.trim() || "",
+        areaSqft: propertyData.areaSqft?.trim() || "",
+        highlights: propertyData.highlights || [],
+        featuresAmenities: propertyData.featuresAmenities || [],
+        nearby: propertyData.nearby || [],
+        googleMapUrl: propertyData.googleMapUrl?.trim() || "",
+        videoLink: propertyData.videoLink?.trim() || "",
+        extraHighlights: propertyData.extraHighlights || [],
+        instagramLink: propertyData.instagramLink?.trim() || "",
+        extraDetails: propertyData.extraDetails?.trim() || "",
+        faqs: propertyData.faqs || [],
+        metatitle: propertyData.metatitle?.trim() || "",
+        metadescription: propertyData.metadescription?.trim() || "",
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Property updated successfully",
+      data: property,
+    });
+  } catch (error) {
+    console.error("Update Property Error:", error);
+
+    // Clean up newly uploaded files on error
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => {
+        deleteFromCloudinary(file.path);
+      });
+    }
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Slug already exists",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error while updating property",
     });
   }
 };
@@ -290,7 +509,9 @@ export const getPropertyBySlug = async (req, res) => {
 };
 
 // UPDATE PROPERTY
-export const updateProperty = async (req, res) => {
+{
+  /**
+  export const updateProperty = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -385,7 +606,8 @@ export const updateProperty = async (req, res) => {
       message: "Server error while updating property",
     });
   }
-};
+}; */
+}
 
 // DELETE PROPERTY
 export const deleteProperty = async (req, res) => {
@@ -456,6 +678,66 @@ export const getUniqueTypes = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while fetching types",
+    });
+  }
+};
+
+// Add this new function
+export const uploadPropertyImages = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No images uploaded",
+      });
+    }
+
+    // Get uploaded image URLs from Cloudinary
+    const imageUrls = req.files.map((file) => file.path);
+
+    return res.status(200).json({
+      success: true,
+      message: "Images uploaded successfully",
+      data: imageUrls,
+    });
+  } catch (error) {
+    console.error("Upload Images Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to upload images",
+    });
+  }
+};
+
+// Add this function to delete images from Cloudinary
+export const deletePropertyImage = async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "Image URL is required",
+      });
+    }
+
+    // Extract public_id from Cloudinary URL
+    const urlParts = imageUrl.split("/");
+    const publicIdWithExtension = urlParts[urlParts.length - 1];
+    const publicId = `properties/${publicIdWithExtension.split(".")[0]}`;
+
+    // Delete from Cloudinary
+    await cloudinary.uploader.destroy(publicId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Image deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Image Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete image",
     });
   }
 };
