@@ -67,4 +67,78 @@ export const uploadResume = multer({
   },
 });
 
+const blogFeaturedStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const cleanName = file.originalname.replace(/\s+/g, "_").split(".")[0];
+
+    return {
+      folder: "RPH/blogs/images",
+      resource_type: "image",
+      type: "upload",
+      access_mode: "public",
+
+      public_id: `property_${cleanName}_${Date.now()}`,
+      allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    };
+  },
+});
+const blogContentStorage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: "RPH/blogs/content",
+      resource_type: "image",
+      type: "upload",
+      access_mode: "public",
+
+      public_id: `blog_content_${Date.now()}`,
+      allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    };
+  },
+});
+
+
+export const uploadBlogFeaturedImage = multer({
+  storage: blogFeaturedStorage, limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
+export const uploadBlogContentImages = multer({
+  storage: blogContentStorage, limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+    files: 10,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
+export const deleteFromCloudinary = async (publicId) => {
+  try {
+    if (!publicId) return;
+    await cloudinary.uploader.destroy(publicId);
+    console.log(`Deleted image: ${publicId}`);
+  } catch (error) {
+    console.error(`Failed to delete image from Cloudinary:`, error);
+  }
+};
+
 export default upload;

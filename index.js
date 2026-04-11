@@ -7,6 +7,7 @@ import leadRoutes from "./routes/leadRoutes.js";
 import employeeRoutes from "./routes/employeeRoutes.js";
 import propertyRoutes from "./routes/propertyRoutes.js";
 import applicationRoutes from "./routes/applicationRoutes.js";
+import blogRoutes from "./routes/blogRoutes.js";
 
 // load env
 dotenv.config();
@@ -24,6 +25,7 @@ app.use("/api/leads", leadRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/properties", propertyRoutes);
 app.use("/api/applications", applicationRoutes);
+app.use("/api/blogs", blogRoutes);
 
 // test route
 app.get("/", (req, res) => {
