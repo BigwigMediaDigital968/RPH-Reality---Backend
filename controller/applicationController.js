@@ -327,7 +327,7 @@ export const deleteApplication = async (req, res) => {
       });
     }
 
-    await application.remove();
+    await Application.findByIdAndDelete(id);
 
     res.status(200).json({
       success: true,

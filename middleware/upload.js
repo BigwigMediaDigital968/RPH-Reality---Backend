@@ -1,6 +1,8 @@
 import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import cloudinary from "../config/cloudinary.js";
+import crypto from "crypto";
+import { access } from "fs";
 
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
@@ -35,9 +37,11 @@ const resumeStorage = new CloudinaryStorage({
     const cleanName = file.originalname.replace(/\s+/g, "_").split(".")[0];
     return {
       folder: "RPH/resumes",
-      resource_type: "raw", // 🔥 IMPORTANT
-      format: "pdf", // optional (or remove to allow doc/docx),
-      public_id: `resume_${cleanName}`,
+      resource_type: "raw",
+      type: "upload",
+      format: "pdf",
+      access_mode: "public",
+      public_id: `resume_${cleanName}_${crypto.randomUUID()}`,
     };
   },
 });
