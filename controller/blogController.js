@@ -51,11 +51,14 @@ export const uploadContentImage = async (req, res) => {
       });
     }
 
-    const result = await uploadBlogContentImages(req.file);
+    //const result = await uploadBlogContentImages(req.file);
 
     return res.status(200).json({
       success: true,
-      data: result,
+      data: {
+        url: req.file.path,
+        public_id: req.file.filename,
+      },
     });
   } catch (error) {
     console.error("Upload Content Image Error:", error);
@@ -101,18 +104,23 @@ export const createBlog = async (req, res) => {
     }
 
     // Sanitize content
-    const sanitizedContent = sanitizeHTML(content);
+    const sanitizedContent = await sanitizeHTML(content);
 
     // Handle featured image upload
     let blogImage = { url: "", publicId: "" };
     if (req.file) {
-      blogImage = await uploadBlogFeaturedImage(req.file.buffer);
+      blogImage = {
+        url: req.file.path,
+        publicId: req.file.filename,
+      };
     }
 
     // Parse arrays if they're strings
     const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags || [];
     const parsedMetaKeywords =
-      typeof metaKeywords === "string" ? JSON.parse(metaKeywords) : metaKeywords || [];
+      typeof metaKeywords === "string"
+        ? JSON.parse(metaKeywords)
+        : metaKeywords || [];
     const parsedFaqs = typeof faqs === "string" ? JSON.parse(faqs) : faqs || [];
 
     // Create blog
@@ -293,7 +301,7 @@ export const getBlogBySlug = async (req, res) => {
     const blog = await Blog.findOneAndUpdate(
       { slug, status: "published" },
       { $inc: { views: 1 } }, // Increment views
-      { new: true }
+      { new: true },
     ).lean();
 
     if (!blog) {
@@ -373,7 +381,9 @@ export const updateBlog = async (req, res) => {
     }
 
     if (content) {
-      updateData.content = sanitizeHTML(content);
+      updateData.content = await sanitizeHTML(content);
+      console.log(content);
+      console.log(updateData.content);
     }
 
     if (excerpt !== undefined) updateData.excerpt = excerpt.trim();
@@ -396,7 +406,9 @@ export const updateBlog = async (req, res) => {
     }
     if (metaKeywords !== undefined) {
       updateData.metaKeywords =
-        typeof metaKeywords === "string" ? JSON.parse(metaKeywords) : metaKeywords;
+        typeof metaKeywords === "string"
+          ? JSON.parse(metaKeywords)
+          : metaKeywords;
     }
     if (faqs !== undefined) {
       updateData.faqs = typeof faqs === "string" ? JSON.parse(faqs) : faqs;
@@ -490,12 +502,13 @@ export const deleteBlog = async (req, res) => {
 // GET BLOG STATS
 export const getBlogStats = async (req, res) => {
   try {
-    const [totalBlogs, publishedBlogs, draftBlogs, totalViews] = await Promise.all([
-      Blog.countDocuments(),
-      Blog.countDocuments({ status: "published" }),
-      Blog.countDocuments({ status: "draft" }),
-      Blog.aggregate([{ $group: { _id: null, total: { $sum: "$views" } } }]),
-    ]);
+    const [totalBlogs, publishedBlogs, draftBlogs, totalViews] =
+      await Promise.all([
+        Blog.countDocuments(),
+        Blog.countDocuments({ status: "published" }),
+        Blog.countDocuments({ status: "draft" }),
+        Blog.aggregate([{ $group: { _id: null, total: { $sum: "$views" } } }]),
+      ]);
 
     return res.status(200).json({
       success: true,

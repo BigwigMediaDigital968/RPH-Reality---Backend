@@ -80,21 +80,20 @@ const blogSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Index for search
 blogSchema.index({ title: "text", content: "text", tags: "text" });
 
 // Auto-generate slug
-blogSchema.pre("save", function (next) {
+blogSchema.pre("save", async function (next) {
   if (this.isModified("title") && !this.slug) {
     this.slug = this.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
   }
-  next();
 });
 
 const Blog = mongoose.model("Blog", blogSchema);
