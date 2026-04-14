@@ -298,7 +298,7 @@ export const updateProperty = async (req, res) => {
       }
     }
 
-    const listingStatus = getValidListingStatus(req.body.listingStatus);
+    const listingStatus = getValidListingStatus(propertyData.listingStatus);
 
     // Update property
     const property = await Property.findByIdAndUpdate(
@@ -378,6 +378,7 @@ export const getProperties = async (req, res) => {
       minPrice,
       maxPrice,
       bedrooms,
+      listingStatus,
       sort = "desc",
       sortBy = "createdAt",
     } = req.query;
