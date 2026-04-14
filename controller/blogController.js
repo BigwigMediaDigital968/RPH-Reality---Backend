@@ -527,3 +527,68 @@ export const getBlogStats = async (req, res) => {
     });
   }
 };
+
+// GET RELATED BLOGS
+export const getRelatedBlogs = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 4 } = req.query;
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid blog ID",
+      });
+    }
+
+    // Get the current blog
+    const currentBlog = await Blog.findById(id).lean();
+
+    if (!currentBlog) {
+      return res.status(404).json({
+        success: false,
+        message: "Blog not found",
+      });
+    }
+
+    // Build query for related blogs
+    const relatedQuery = {
+      _id: { $ne: id }, // Exclude current blog
+      status: "published", // Only published blogs
+      $or: [],
+    };
+
+    // Add category match (highest priority)
+    if (currentBlog.category) {
+      relatedQuery.$or.push({ category: currentBlog.category });
+    }
+
+    // Add tags match (second priority)
+    if (currentBlog.tags && currentBlog.tags.length > 0) {
+      relatedQuery.$or.push({ tags: { $in: currentBlog.tags } });
+    }
+
+    // If no category or tags, just get recent blogs
+    if (relatedQuery.$or.length === 0) {
+      delete relatedQuery.$or;
+    }
+
+    // Fetch related blogs with aggregation for scoring
+    const relatedBlogs = await Blog.find(relatedQuery)
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    return res.status(200).json({
+      success: true,
+      data: relatedBlogs,
+      count: relatedBlogs.length,
+    });
+  } catch (error) {
+    console.error("Get Related Blogs Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching related blogs",
+    });
+  }
+};
