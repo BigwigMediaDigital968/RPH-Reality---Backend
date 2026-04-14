@@ -12,8 +12,15 @@ const propertySchema = new mongoose.Schema(
     },
     purpose: {
       type: String,
-      enum: ["buy", "rent", "lease"],
+      enum: ["sale", "rent", "lease"],
       required: true,
+    },
+    listingStatus: {
+      type: String,
+      enum: ["featured", "new", "hot", "premium", "standard"],
+      default: "standard",
+      lowercase: true,
+      trim: true,
     },
     location: { type: String, required: true },
     brochure: { type: String, default: "" },

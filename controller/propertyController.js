@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Property from "../models/Property.js";
 import cloudinary from "../config/cloudinary.js";
 
+const ALLOWED_STATUS = ["featured", "new", "hot", "premium", "standard"];
+
 // Validation helper
 const validateObjectId = (id) => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -24,13 +26,26 @@ const generateSlug = (title) => {
     .replace(/^-+|-+$/g, "");
 };
 
+const getValidListingStatus = (status) => {
+  if (typeof status !== "string") return "standard";
+
+  const normalized = status.toLowerCase().trim();
+  return ALLOWED_STATUS.includes(normalized) ? normalized : "standard";
+};
+
 // Helper: Extract Cloudinary public ID from URL
 const getCloudinaryPublicId = (url) => {
   try {
-    const urlParts = url.split("/");
-    const publicIdWithExtension = urlParts[urlParts.length - 1];
-    const publicId = `properties/${publicIdWithExtension.split(".")[0]}`;
-    return publicId;
+    const parts = url.split("/upload/");
+    if (parts.length < 2) return null;
+
+    let path = parts[1];
+
+    // remove version (v123456/)
+    path = path.replace(/^v\d+\//, "");
+
+    // remove extension
+    return path.replace(/\.[^/.]+$/, "");
   } catch (error) {
     console.error("Error extracting public ID:", error);
     return null;
@@ -119,6 +134,8 @@ export const createProperty = async (req, res) => {
       });
     }
 
+    const listingStatus = getValidListingStatus(req.body.listingStatus);
+
     // Create property
     const property = await Property.create({
       title: propertyData.title?.trim(),
@@ -145,6 +162,7 @@ export const createProperty = async (req, res) => {
       faqs: propertyData.faqs || [],
       metatitle: propertyData.metatitle?.trim() || "",
       metadescription: propertyData.metadescription?.trim() || "",
+      listingStatus: listingStatus,
     });
 
     return res.status(201).json({
@@ -280,6 +298,8 @@ export const updateProperty = async (req, res) => {
       }
     }
 
+    const listingStatus = getValidListingStatus(req.body.listingStatus);
+
     // Update property
     const property = await Property.findByIdAndUpdate(
       id,
@@ -308,6 +328,7 @@ export const updateProperty = async (req, res) => {
         faqs: propertyData.faqs || [],
         metatitle: propertyData.metatitle?.trim() || "",
         metadescription: propertyData.metadescription?.trim() || "",
+        listingStatus: listingStatus,
       },
       {
         new: true,
@@ -413,7 +434,7 @@ export const getProperties = async (req, res) => {
     // Format stats
     const purposeStats = {
       all: total,
-      buy: 0,
+      sale: 0,
       rent: 0,
       lease: 0,
     };
@@ -616,7 +637,7 @@ export const deleteProperty = async (req, res) => {
 
     validateObjectId(id);
 
-    const property = await Property.findByIdAndDelete(id);
+    const property = await Property.findById(id);
 
     if (!property) {
       return res.status(404).json({
@@ -624,6 +645,17 @@ export const deleteProperty = async (req, res) => {
         message: "Property not found",
       });
     }
+
+    if (property.images?.length) {
+      const deletePromises = property.images.map((url) => {
+        return deleteFromCloudinary(url);
+      });
+
+      await Promise.all(deletePromises);
+    }
+
+    // then delete property
+    await Property.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,
