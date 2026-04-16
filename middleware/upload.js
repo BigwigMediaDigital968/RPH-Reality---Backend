@@ -7,27 +7,55 @@ import { access } from "fs";
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    return {
-      folder: "RPH/properties",
-      allowed_formats: ["jpg", "jpeg", "png", "webp"],
-    };
+    // 🖼️ Images (KEEP SAME BEHAVIOR)
+    if (file.fieldname.startsWith("images")) {
+      return {
+        folder: "RPH/properties",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      };
+    }
+
+    // 📄 Brochure (NEW)
+    if (file.fieldname === "brochure") {
+      const cleanName = file.originalname.replace(/\s+/g, "_").split(".")[0];
+
+      return {
+        folder: "RPH/properties/brochures",
+        resource_type: "raw", // IMPORTANT for pdf
+        type: "upload",
+        format: "pdf",
+        access_mode: "public",
+        public_id: `brochure_${cleanName}_${Date.now()}`,
+      };
+    }
   },
 });
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-    files: 10,
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 20,
   },
   fileFilter: (req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
-
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only image files are allowed"));
+    // 🖼️ Images (NO CHANGE in logic)
+    if (file.fieldname.startsWith("images")) {
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+      return allowed.includes(file.mimetype)
+        ? cb(null, true)
+        : cb(new Error("Only image files are allowed"));
     }
+
+    // 📄 Brochure
+    if (file.fieldname === "brochure") {
+      const allowed = ["application/pdf"];
+      return allowed.includes(file.mimetype)
+        ? cb(null, true)
+        : cb(new Error("Only PDF allowed"));
+    }
+
+    // ❌ Reject anything else
+    cb(new Error(`Unexpected field: ${file.fieldname}`));
   },
 });
 
@@ -98,9 +126,9 @@ const blogContentStorage = new CloudinaryStorage({
   },
 });
 
-
 export const uploadBlogFeaturedImage = multer({
-  storage: blogFeaturedStorage, limits: {
+  storage: blogFeaturedStorage,
+  limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
     files: 1,
   },
@@ -116,7 +144,8 @@ export const uploadBlogFeaturedImage = multer({
 });
 
 export const uploadBlogContentImages = multer({
-  storage: blogContentStorage, limits: {
+  storage: blogContentStorage,
+  limits: {
     fileSize: 5 * 1024 * 1024, // 5MB
     files: 10,
   },

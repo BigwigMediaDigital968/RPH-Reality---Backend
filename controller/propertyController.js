@@ -133,6 +133,14 @@ export const createProperty = async (req, res) => {
         message: "At least one image is required",
       });
     }
+    let brochureUrl = "";
+
+    if (req.files) {
+      const brochureFile = req.files.find((f) => f.fieldname === "brochure");
+      if (brochureFile) {
+        brochureUrl = brochureFile?.path; // Cloudinary URL
+      }
+    }
 
     const listingStatus = getValidListingStatus(req.body.listingStatus);
 
@@ -144,7 +152,7 @@ export const createProperty = async (req, res) => {
       type: propertyData.type?.trim() || "",
       purpose: propertyData.purpose,
       location: propertyData.location?.trim(),
-      brochure: propertyData.brochure?.trim() || "",
+      brochure: brochureUrl || "",
       builder: propertyData.builder?.trim() || "",
       images: finalImages,
       price: propertyData.price?.trim() || "",
@@ -300,6 +308,38 @@ export const updateProperty = async (req, res) => {
 
     const listingStatus = getValidListingStatus(propertyData.listingStatus);
 
+    let brochure = existingProperty.brochure;
+
+    if (req.files) {
+      const brochureFile = req.files.find((f) => f.fieldname === "brochure");
+
+      if (brochureFile) {
+        // Delete old brochure if exists
+        if (existingProperty.brochure) {
+          const publicId = getCloudinaryPublicId(existingProperty.brochure);
+          if (publicId) {
+            await cloudinary.uploader.destroy(publicId, {
+              resource_type: "raw",
+            });
+          }
+        }
+        brochure = brochureFile.path;
+      } else if (req.body.removeBrochure === "true") {
+        // Remove brochure
+        if (existingProperty.brochure) {
+          const publicId = getCloudinaryPublicId(existingProperty.brochure);
+          if (publicId) {
+            await cloudinary.uploader.destroy(publicId, {
+              resource_type: "raw",
+            });
+          }
+        }
+        brochure = "";
+      }
+    }
+
+    //console.log("bro", brochure);
+
     // Update property
     const property = await Property.findByIdAndUpdate(
       id,
@@ -310,7 +350,7 @@ export const updateProperty = async (req, res) => {
         type: propertyData.type?.trim() || "",
         purpose: propertyData.purpose,
         location: propertyData.location?.trim(),
-        brochure: propertyData.brochure?.trim() || "",
+        brochure: brochure || "",
         builder: propertyData.builder?.trim() || "",
         images: finalImages,
         price: propertyData.price?.trim() || "",
