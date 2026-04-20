@@ -301,7 +301,7 @@ export const getBlogBySlug = async (req, res) => {
     const blog = await Blog.findOneAndUpdate(
       { slug, status: "published" },
       { $inc: { views: 1 } }, // Increment views
-      { new: true },
+      { returnDocument: "after" },
     ).lean();
 
     if (!blog) {

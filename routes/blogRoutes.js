@@ -29,8 +29,9 @@ router.post("/", uploadBlogFeaturedImage.single("featuredImage"), createBlog);
 router.get("/", getBlogs);
 router.get("/stats", getBlogStats);
 router.get("/slug/:slug", getBlogBySlug);
-router.get("/:id", getBlogById);
 router.get("/related/:id", getRelatedBlogs);
+router.get("/:id", getBlogById);
+
 router.put("/:id", uploadBlogFeaturedImage.single("featuredImage"), updateBlog);
 router.delete("/:id", deleteBlog);
 
