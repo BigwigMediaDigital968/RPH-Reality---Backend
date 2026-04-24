@@ -19,7 +19,7 @@ const sanitizeString = (str) => {
 // CREATE
 export const createLead = async (req, res) => {
   try {
-    const { name, phone, email, city, purpose, note } = req.body;
+    const { name, phone, email, city, purpose, note, source } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({
@@ -35,6 +35,7 @@ export const createLead = async (req, res) => {
       city: sanitizeString(city),
       purpose: purpose?.trim().toLowerCase() || "",
       note: sanitizeString(note),
+      source: sanitizeString(source),
     });
 
     return res.status(201).json({
