@@ -534,16 +534,17 @@ export const getRelatedBlogs = async (req, res) => {
     const { id } = req.params;
     const { limit = 4 } = req.query;
 
+    let currentBlog;
     // Validate ID
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid blog ID",
-      });
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      // Try finding by ObjectId first
+      currentBlog = await Blog.findById(id).lean();
     }
 
-    // Get the current blog
-    const currentBlog = await Blog.findById(id).lean();
+    // If not found (or not a valid ObjectId), try slug
+    if (!currentBlog) {
+      currentBlog = await Blog.findOne({ slug: id }).lean();
+    }
 
     if (!currentBlog) {
       return res.status(404).json({
