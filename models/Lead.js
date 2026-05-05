@@ -21,7 +21,7 @@ const leadSchema = new mongoose.Schema(
     },
     purpose: {
       type: String,
-      enum: ["buy", "sell", "rent", "invest", "others"],
+      enum: ["buy", "sell", "rent", "invest", "other"],
       default: "",
     },
     note: {
