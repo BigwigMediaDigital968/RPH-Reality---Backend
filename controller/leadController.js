@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import { ALLOWED_STATUSES } from "../constants.js";
 import Employee from "../models/Employee.js";
 import Lead from "../models/Lead.js";
+import { appendLeadToEmployeeSheet } from "../services/sheetsService.js";
 
 // Validation helper
 const validateObjectId = (id) => {
@@ -365,68 +366,65 @@ export const deleteLead = async (req, res) => {
   }
 };
 
-// ASSIGN LEAD
+
+/**
+ * Transforms a Mongoose Lead document into a row array for Google Sheets
+ * @param {Object} lead - The Mongoose Lead document
+ */
+// Correct 1D row — the service will wrap it into [[...]]
+const prepareLeadRow = (lead) => [
+    new Date(lead.createdAt).toLocaleString('en-IN'),
+    lead.name        || '',
+    lead.phone       || '',
+    lead.email       || '',
+    lead.city        || '',
+    lead.purpose     || '',
+    lead.note        || '',
+    lead.adminNote   || '',
+    lead.source      || '',
+];
+
 export const assignLead = async (req, res) => {
-  try {
-    const { employeeId } = req.body;
-    const { id } = req.params;
+    try {
+        const { employeeId } = req.body;
+        const { id } = req.params;
 
-    if (!employeeId || !id) {
-      return res.status(400).json({
-        success: false,
-        message: "Employee ID and Lead ID are required",
-      });
+        if (!employeeId || !id) {
+            return res.status(400).json({ success: false, message: "Employee ID and Lead ID are required" });
+        }
+
+        validateObjectId(id);
+        validateObjectId(employeeId);
+
+        const employee = await Employee.findById(employeeId);
+        if (!employee || !employee.isActive) {
+            return res.status(404).json({ success: false, message: "Employee not found or inactive" });
+        }
+
+        // ✅ Fetch lead BEFORE using it
+        const lead = await Lead.findById(id).populate("assignedTo", "name email phone");
+        if (!lead) {
+            return res.status(404).json({ success: false, message: "Lead not found" });
+        }
+
+        const rowData = prepareLeadRow(lead);
+
+        // employee.sheetId stores the full URL — already handled by getSheetIdFromUrl
+        await appendLeadToEmployeeSheet(employee.sheetId, rowData);
+
+        lead.assignedTo  = employeeId;
+        lead.assignedAt  = new Date();
+        lead.status      = "assigned";
+        lead.sheetSynced = true;
+        await lead.save();
+
+        return res.json({ success: true, message: "Lead assigned successfully", data: lead });
+
+    } catch (error) {
+        console.error("Assign Lead Error:", error);
+        if (error.message === "Invalid ID format") {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+        res.status(500).json({ success: false, message: "Assignment failed" });
     }
-
-    validateObjectId(id);
-    validateObjectId(employeeId);
-
-    const employee = await Employee.findById(employeeId);
-    if (!employee || !employee.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found or inactive",
-      });
-    }
-
-    const lead = await Lead.findByIdAndUpdate(
-      id,
-      {
-        assignedTo: employee._id,
-        assignedAt: new Date(),
-        status: "assigned",
-      },
-      { new: true },
-    ).populate("assignedTo", "name email phone");
-
-    if (!lead) {
-      return res.status(404).json({
-        success: false,
-        message: "Lead not found",
-      });
-    }
-
-    // TODO: Send to Google Sheet functionality
-    // await sendToGoogleSheet(lead, employee);
-
-    return res.json({
-      success: true,
-      message: "Lead assigned successfully",
-      data: lead,
-    });
-  } catch (error) {
-    console.error("Assign Lead Error:", error);
-
-    if (error.message === "Invalid ID format") {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Assignment failed",
-    });
-  }
 };
