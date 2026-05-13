@@ -372,16 +372,33 @@ export const deleteLead = async (req, res) => {
  * @param {Object} lead - The Mongoose Lead document
  */
 // Correct 1D row — the service will wrap it into [[...]]
-const prepareLeadRow = (lead) => [
-    new Date(lead.createdAt).toLocaleString('en-IN'),
-    lead.name        || '',
-    lead.phone       || '',
-    lead.email       || '',
-    lead.city        || '',
-    lead.purpose     || '',
-    lead.note        || '',
-    lead.adminNote   || '',
-    lead.source      || '',
+function formatIndianDate(date) {
+    const d = new Date(date);
+
+    const day   = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year  = d.getFullYear();
+
+    let hours   = d.getHours();
+    const mins  = String(d.getMinutes()).padStart(2, '0');
+    const ampm  = hours >= 12 ? 'PM' : 'AM';
+    hours       = hours % 12 || 12;
+    const hh    = String(hours).padStart(2, '0');
+
+    return `${day}/${month}/${year} ${hh}:${mins} ${ampm}`;
+}
+
+export const prepareLeadRow = (lead) => [
+    formatIndianDate(lead.createdAt),             // from timestamps: true
+    formatIndianDate(lead.assignedAt || new Date()),
+    lead.name      || '',
+    lead.phone     || '',
+    lead.email     || '',
+    lead.city      || '',
+    lead.purpose   || '',
+    lead.note      || '',
+    lead.adminNote || '',
+    lead.source    || 'website',
 ];
 
 export const assignLead = async (req, res) => {
@@ -408,14 +425,15 @@ export const assignLead = async (req, res) => {
         }
 
         const rowData = prepareLeadRow(lead);
-
-        // employee.sheetId stores the full URL — already handled by getSheetIdFromUrl
-        await appendLeadToEmployeeSheet(employee.sheetId, rowData);
-
+        
         lead.assignedTo  = employeeId;
         lead.assignedAt  = new Date();
         lead.status      = "assigned";
         lead.sheetSynced = true;
+
+        // employee.sheetId stores the full URL — already handled by getSheetIdFromUrl
+        await appendLeadToEmployeeSheet(employee.sheetId, rowData);
+
         await lead.save();
 
         return res.json({ success: true, message: "Lead assigned successfully", data: lead });
